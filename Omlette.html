@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Website Builder</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .sidebar {
+            width: 280px;
+        }
+        .drag-item {
+            cursor: grab;
+            transition: transform 0.2s;
+        }
+        .drag-item:active {
+            cursor: grabbing;
+        }
+        .canvas-section {
+            min-height: 200px;
+            border-bottom: 2px dashed #e5e7eb;
+            transition: all 0.3s ease;
+        }
+        .canvas-section:hover {
+            border-color: #9ca3af;
+        }
+        .chat-bubble {
+            max-width: 80%;
+            border-radius: 1rem;
+            padding: 0.75rem 1rem;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans antialiased flex h-screen overflow-hidden">
+
+    <aside class="sidebar bg-white shadow-lg p-6 flex flex-col justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">AI Builder</h1>
+
+            <div class="mb-8">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4">Drag-and-Drop Components</h2>
+                <div class="grid grid-cols-1 gap-4">
+                    <div id="hero-component" class="drag-item p-4 bg-white border border-gray-300 rounded-lg shadow-sm text-center font-medium hover:bg-gray-50 transition">Hero Section</div>
+                    <div id="features-component" class="drag-item p-4 bg-white border border-gray-300 rounded-lg shadow-sm text-center font-medium hover:bg-gray-50 transition">Features Grid</div>
+                    <div id="cta-component" class="drag-item p-4 bg-white border border-gray-300 rounded-lg shadow-sm text-center font-medium hover:bg-gray-50 transition">Call to Action</div>
+                    <div id="testimonials-component" class="drag-item p-4 bg-white border border-gray-300 rounded-lg shadow-sm text-center font-medium hover:bg-gray-50 transition">Testimonials</div>
+                </div>
+            </div>
+
+            <div>
+                <h2 class="text-lg font-semibold text-gray-700 mb-4">AI-Assisted Generation</h2>
+                <div class="space-y-2">
+                    <input type="text" id="ai-input" placeholder="e.g., 'Generate a simple pricing table'" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="ai-generate-btn" class="w-full py-2 bg-gray-800 text-white font-medium rounded-lg hover:bg-gray-700 transition">Generate</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-gray-200">
+            <button id="deploy-btn" class="w-full py-3 mb-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition">Deploy Project</button>
+            <button id="auth-btn" class="w-full py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition">Login</button>
+        </div>
+    </aside>
+
+    <main class="flex-1 overflow-auto p-8">
+        <header class="flex justify-between items-center mb-6">
+            <h2 class="text-3xl font-bold text-gray-800">Visual Canvas</h2>
+            <div id="status-message" class="text-lg text-gray-500 font-medium"></div>
+        </header>
+        
+        <div id="canvas" class="bg-white p-6 rounded-lg shadow-inner border-4 border-dashed border-gray-200 min-h-full">
+            <h3 class="text-center text-gray-400 font-medium py-12">Drag components here or use the AI assistant.</h3>
+        </div>
+    </main>
+
+    <div id="chat-container" class="fixed bottom-4 right-4 z-50">
+        <button id="chat-toggle-btn" class="w-16 h-16 bg-blue-600 rounded-full text-white text-3xl flex items-center justify-center shadow-lg hover:bg-blue-700 transition">?</button>
+        
+        <div id="chat-window" class="hidden bg-white rounded-lg shadow-xl w-80 h-96 flex flex-col p-4">
+            <div class="flex-1 overflow-y-auto mb-4" id="chat-log">
+                <div class="flex justify-end mb-2">
+                    <div class="bg-blue-100 text-blue-900 chat-bubble">How can I help you today?</div>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <input type="text" id="chat-input" placeholder="Ask a question..." class="flex-1 px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button id="chat-send-btn" class="w-10 h-10 bg-blue-600 rounded-full text-white text-xl flex items-center justify-center hover:bg-blue-700 transition">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=AIzaSyDWp7lRl-Qi5nAsYuENBUZc0vVIQZOgO54`;
+            const canvas = document.getElementById('canvas');
+            const statusMessage = document.getElementById('status-message');
+            const deployBtn = document.getElementById('deploy-btn');
+            const authBtn = document.getElementById('auth-btn');
+            const aiInput = document.getElementById('ai-input');
+            const aiGenerateBtn = document.getElementById('ai-generate-btn');
+
+            // Chat Assistant elements
+            const chatToggleBtn = document.getElementById('chat-toggle-btn');
+            const chatWindow = document.getElementById('chat-window');
+            const chatLog = document.getElementById('chat-log');
+            const chatInput = document.getElementById('chat-input');
+            const chatSendBtn = document.getElementById('chat-send-btn');
+
+            // --- Simulated Auth (Backend Logic) ---
+            let isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+
+            function updateAuthButton() {
+                authBtn.textContent = isLoggedIn ? 'Logout' : 'Login';
+                statusMessage.textContent = isLoggedIn ? 'Logged in as Non-Technical Founder' : 'Logged out';
+                if (isLoggedIn) {
+                    statusMessage.classList.remove('text-gray-500');
+                    statusMessage.classList.add('text-green-600');
+                } else {
+                    statusMessage.classList.remove('text-green-600');
+                    statusMessage.classList.add('text-gray-500');
+                }
+            }
+
+            authBtn.addEventListener('click', () => {
+                isLoggedIn = !isLoggedIn;
+                localStorage.setItem('isLoggedIn', isLoggedIn);
+                updateAuthButton();
+            });
+
+            updateAuthButton();
+
+            // --- Simulated Drag-and-Drop (Frontend Logic) ---
+            const components = {
+                'hero-component': `
+                    <section class="canvas-section bg-blue-600 text-white py-20 px-6 text-center">
+                        <h1 class="text-5xl font-extrabold mb-4">Launch Your Idea with AI</h1>
+                        <p class="text-xl font-light mb-8">Build full-stack applications without writing a single line of code.</p>
+                        <button class="bg-white text-blue-600 font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-100 transition">Get Started</button>
+                    </section>
+                `,
+                'features-component': `
+                    <section class="canvas-section py-16 px-6 bg-white">
+                        <h2 class="text-4xl font-bold text-center mb-12">Key Features</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+                            <div class="p-6 bg-gray-50 rounded-lg shadow-sm">
+                                <h3 class="font-bold text-xl mb-2">AI Code Generation</h3>
+                                <p class="text-gray-600">Instantly generate clean, production-ready code.</p>
+                            </div>
+                            <div class="p-6 bg-gray-50 rounded-lg shadow-sm">
+                                <h3 class="font-bold text-xl mb-2">Backend Builder</h3>
+                                <p class="text-gray-600">Create APIs and database models with simple commands.</p>
+                            </div>
+                            <div class="p-6 bg-gray-50 rounded-lg shadow-sm">
+                                <h3 class="font-bold text-xl mb-2">One-Click Deployment</h3>
+                                <p class="text-gray-600">Go live in seconds with seamless deployment.</p>
+                            </div>
+                        </div>
+                    </section>
+                `,
+                'cta-component': `
+                    <section class="canvas-section bg-gray-800 text-white text-center py-20 px-6">
+                        <h2 class="text-4xl font-bold mb-4">Ready to build your next big thing?</h2>
+                        <button class="bg-green-500 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-green-600 transition mt-4">Start Building Now</button>
+                    </section>
+                `,
+                'testimonials-component': `
+                    <section class="canvas-section bg-white py-16 px-6">
+                        <h2 class="text-4xl font-bold text-center mb-12">What Our Users Say</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <blockquote class="p-6 bg-gray-100 rounded-lg shadow-sm border-l-4 border-blue-500">
+                                <p class="italic text-gray-700 mb-4">"This platform is a game-changer! I launched my startup's website in a weekend without any coding knowledge."</p>
+                                <footer class="font-semibold text-gray-800">- Jane Doe, Founder</footer>
+                            </blockquote>
+                            <blockquote class="p-6 bg-gray-100 rounded-lg shadow-sm border-l-4 border-blue-500">
+                                <p class="italic text-gray-700 mb-4">"The AI assistant is like having a co-founder. It helped me create complex features effortlessly."</p>
+                                <footer class="font-semibold text-gray-800">- John Smith, Entrepreneur</footer>
+                            </blockquote>
+                        </div>
+                    </section>
+                `
+            };
+
+            function addComponentToCanvas(componentHTML) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = componentHTML;
+                const newSection = tempDiv.firstElementChild;
+                
+                const placeholder = canvas.querySelector('h3');
+                if (placeholder) {
+                    placeholder.remove();
+                }
+                canvas.appendChild(newSection);
+                // Add a small "x" button to remove the section
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = 'x';
+                removeBtn.className = 'absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition';
+                newSection.style.position = 'relative';
+                newSection.classList.add('group');
+                newSection.appendChild(removeBtn);
+
+                removeBtn.addEventListener('click', () => {
+                    newSection.remove();
+                    if (canvas.childElementCount === 0) {
+                        canvas.innerHTML = '<h3 class="text-center text-gray-400 font-medium py-12">Drag components here or use the AI assistant.</h3>';
+                    }
+                });
+            }
+
+            // Drag-and-Drop functionality
+            document.querySelectorAll('.drag-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    const componentId = e.target.id;
+                    const prebuiltComponent = components[componentId];
+                    if (prebuiltComponent) {
+                        addComponentToCanvas(prebuiltComponent);
+                    }
+                });
+            });
+
+            // --- Live AI-assisted Generation ---
+            aiGenerateBtn.addEventListener('click', async () => {
+                const prompt = aiInput.value.trim();
+                if (!prompt) return;
+
+                aiGenerateBtn.textContent = 'Generating...';
+                aiGenerateBtn.disabled = true;
+
+                const systemPrompt = `You are an AI web developer. Your task is to generate a simple, clean, and elegant HTML component using Tailwind CSS for a user's prompt. The component should be self-contained within a single <section> tag. Do not include a full HTML document. Only provide the HTML for the component. Example for 'a pricing table': <section class="bg-gray-100 py-16 px-4">...your HTML...</section>. The HTML should be ready to be inserted directly into a web page.`
+
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `${systemPrompt}\n\nUser prompt: ${prompt}`
+                                }]
+                            }]
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`API error: ${JSON.stringify(errorData)}`);
+                    }
+
+                    const data = await response.json();
+                    const generatedHtml = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                    if (generatedHtml) {
+                        addComponentToCanvas(generatedHtml);
+                    } else {
+                        alert('AI could not generate a valid component. Please try again with a different prompt.');
+                    }
+
+                } catch (error) {
+                    console.error('Error generating content:', error);
+                    alert('There was an error connecting to the AI. Please check your API key and network connection.');
+                } finally {
+                    aiGenerateBtn.textContent = 'Generate';
+                    aiGenerateBtn.disabled = false;
+                    aiInput.value = '';
+                }
+            });
+
+            // --- Deploy Simulation ---
+            deployBtn.addEventListener('click', () => {
+                deployBtn.textContent = 'Deploying...';
+                deployBtn.disabled = true;
+                deployBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                deployBtn.classList.add('bg-gray-400');
+                statusMessage.textContent = 'Deployment in progress...';
+                statusMessage.classList.remove('text-green-600', 'text-gray-500');
+                statusMessage.classList.add('text-yellow-500');
+
+                setTimeout(() => {
+                    deployBtn.textContent = 'Deployment Successful!';
+                    statusMessage.textContent = 'Your project is live!';
+                    statusMessage.classList.remove('text-yellow-500');
+                    statusMessage.classList.add('text-green-600');
+                    deployBtn.classList.remove('bg-gray-400');
+                    deployBtn.classList.add('bg-green-600');
+                    deployBtn.disabled = false; // Re-enable for future deployments
+                }, 3000); // Simulate a 3-second deployment time
+            });
+
+            // --- Chat Assistant Logic ---
+            chatToggleBtn.addEventListener('click', () => {
+                chatWindow.classList.toggle('hidden');
+                chatToggleBtn.textContent = chatWindow.classList.contains('hidden') ? '?' : '—';
+            });
+
+            const sendChatMessage = async () => {
+                const userMessage = chatInput.value.trim();
+                if (userMessage === '') return;
+
+                // Display user message
+                const userMsgDiv = document.createElement('div');
+                userMsgDiv.className = 'flex justify-start mb-2';
+                userMsgDiv.innerHTML = `<div class="bg-gray-200 text-gray-800 chat-bubble">${userMessage}</div>`;
+                chatLog.appendChild(userMsgDiv);
+
+                // Simulate AI response
+                const systemPrompt = `You are a helpful AI assistant for a website builder. You answer questions about how to use the builder, explain features, and give tips. Keep your answers concise and helpful.`
+                
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `${systemPrompt}\n\nUser question: ${userMessage}`
+                                }]
+                            }]
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`API error: ${JSON.stringify(errorData)}`);
+                    }
+
+                    const data = await response.json();
+                    const aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                    const aiMsgDiv = document.createElement('div');
+                    aiMsgDiv.className = 'flex justify-end mb-2';
+                    aiMsgDiv.innerHTML = `<div class="bg-blue-100 text-blue-900 chat-bubble">${aiResponse}</div>`;
+                    chatLog.appendChild(aiMsgDiv);
+                    chatLog.scrollTop = chatLog.scrollHeight;
+
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    const errorMsgDiv = document.createElement('div');
+                    errorMsgDiv.className = 'flex justify-end mb-2';
+                    errorMsgDiv.innerHTML = `<div class="bg-red-100 text-red-900 chat-bubble">Error: Could not connect to AI.</div>`;
+                    chatLog.appendChild(errorMsgDiv);
+                }
+
+                chatInput.value = '';
+                chatLog.scrollTop = chatLog.scrollHeight;
+            };
+
+            chatSendBtn.addEventListener('click', sendChatMessage);
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendChatMessage();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
